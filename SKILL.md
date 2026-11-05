@@ -1,172 +1,96 @@
 ---
 name: lanesite-video
-description: Create a 10-second promo video for lanesite.pro by animating shadcn/watermelon components on a dedicated stage page, recording it headlessly with Playwright and encoding with ffmpeg. Use when asked to make, redo or tweak the lanesite promo/website video.
+description: Use when asked to make, redo or batch SaaS promo / social media videos for lanesite.pro (or another web product) from real UI components: product launch, feature demo, UI walkthrough with mouse clicks, typing and zooms, testimonials, pricing, FAQ or changelog clips, Reels/Shorts/TikTok/LinkedIn formats, or a scheduled video campaign. Also when adding animated components from watermelon.sh, Magic UI, Aceternity, React Bits, Animate UI, Cult UI or Motion Primitives to a video.
 ---
 
-# Lanesite 10-second promo video
+# LaneSite video studio
 
-Goal: a polished 10 s MP4 (H.264, 30 fps, no audio) made from the real UI components already installed in this project (`components/watermelon/*`), recorded from a hidden `/video` page. No Remotion: `motion/react` springs run on the real clock, so we record in real time instead of rendering frame by frame.
+Videos are React pages rendered frame by frame. A hidden `/video` route shows one composition; `render.mjs` freezes the page clock (timers, rAF, `performance.now`, `Date`, CSS/WAAPI animations, `<video>`, SMIL) and steps it exactly 1/fps per frame. So every frame is exact, at any machine speed, even with third-party components that animate themselves. A scripted cursor drives the UI, and the real Playwright mouse mirrors it, so hover, focus, `onClick` and `whileHover` fire for real.
 
-## 0. Brief (fill these in; if blank, derive them yourself)
+Output: H.264 MP4 with AAC (synthesised click/key/whoosh/pop/success SFX plus optional music), a poster JPG, and a contact sheet JPG for checking.
 
-- BRAND: Lanesite (lanesite.pro)
-- ONE-LINE PROMISE: `<what lanesite does for the visitor, max 8 words>`
-- 4 FEATURES (title max 4 words, description max 14 words): `<...>`
-- CTA TEXT: `<e.g. Start free at lanesite.pro>`
-- FORMAT: 16:9 1920x1080 (default). For Reels/Shorts use 9:16 1080x1920 and run render with `--w 1080 --h 1920`.
-- BRAND COLORS / FONT: read them from `tailwind.config.*`, `globals.css` (`:root` CSS variables) or the live site. Never invent a palette if the project already has one.
-
-Rules for filling gaps: read the repo (`README`, `app/page.tsx`, hero and feature sections, metadata) and the live site https://lanesite.pro to get real copy. Reuse the site's wording, shortened. Never use lorem ipsum or generic "UX design" placeholder text (the accordion ships with placeholder items; always replace them via the `items` prop).
-
-## 1. Preflight (once per VPS)
+## 1. Setup (once per project)
 
 ```bash
-ffmpeg -version || sudo apt-get update && sudo apt-get install -y ffmpeg
-npm i -D playwright
-npx playwright install --with-deps chromium
+node <skill-dir>/scripts/setup.mjs --project .      # Next.js App Router project
+npm run build && npm run start                        # or npm run dev while iterating
+open http://localhost:3000/video                      # gallery + live preview (R restarts)
 ```
 
-Detect the framework (`next` or `vite` in package.json) and the dev command. Start the dev server in the background and confirm it answers on its port before recording. Headless Chromium needs no display.
+Setup copies `components/video-kit/` (the kit; refresh it with `--update`) and `scripts/video/`. It also creates the files you own, which are never overwritten: `components/video/compositions.ts`, `components/video/player.tsx`, `app/video/{layout,page}.tsx` (noindex, brand fonts) and `video/campaigns/example.json`. It installs `motion`, `lucide-react`, `playwright` + chromium if missing, and checks ffmpeg.
 
-## 2. Storyboard (exactly 10.0 s)
+If another tool or agent is editing the same app, do not run setup in it. Copy the project to a separate folder and use a different port.
 
-| Time | Scene | What is on screen | Motion |
-|---|---|---|---|
-| 0.0-0.2 | Empty | Brand background only | none (trim buffer) |
-| 0.2-1.5 | Hook | Brand name + promise headline | words blur-in, y 24 to 0, 0.06 s stagger, ease `[0.22,1,0.36,1]` |
-| 1.5-8.0 | Demo | Hero component (accordion) with the 4 features, headline shrinks to a small top label | component slides up and fades in (0.5 s), fake cursor clicks items at 2.0 / 3.6 / 5.2 / 6.8 s |
-| 8.0-10.0 | CTA | Large "lanesite.pro" + CTA button | scale 0.9 to 1 spring, button gentle pulse once, everything fades out 9.7-10.0 |
+## 2. Workflow for every video
 
-Adjust timings only if the total stays 10.0 s. Hold every readable state at least 1.2 s.
+1. **Brief.** Goal, format(s), length, CTA. Default: 9:16 + 16:9, 10-15 s, CTA `lanesite.pro`.
+2. **Copy.** Only from `components/video-kit/brand.ts`, which was taken from the live site. If the site changed, re-read https://lanesite.pro and update `brand.ts`. Never invent stats, testimonials, prices or features.
+3. **Pick a format** from the table below. Use a ready template, or build a composition from the recipe.
+4. **Pick components.** Prefer the kit plus brand UI. For extra flair, search the free registries (section 5).
+5. **Script** cursor, camera and cues in local seconds (section 4).
+6. **Check stills first** (fast, no encode): `node scripts/video/render.mjs --id <id> --format 9x16 --stills 0.5,3,6,9`. Then open the PNGs.
+7. **Render**: `node scripts/video/render.mjs --id <id> --format 16x9,9x16`.
+8. **Verify** (mandatory). Open `out/video/<id>-<format>-check.jpg` (12 frames). Look for clipped text, a cursor not on its target, a click that did not change the UI, blank frames, dev overlays, and anything unreadable on a phone. Fix and re-render. The renderer prints duration, size and SFX count; the duration must equal the composition's.
+9. **Hand off**: file paths, duration and the props the user can change.
 
-## 3. How to pick the best element for each point
+## 3. Formats (video styles)
 
-Choose by what the viewer must understand in that moment, not by what looks fanciest. One hero component per scene, at most 3 scenes.
+| id | Status | Length | Use for | Story |
+|---|---|---|---|---|
+| `launch` | template | 15 s | hero promo, pinned post, site header | hook → browser drops in (3D) → cursor types brief → clicks Build → build log → site live → order toast → end card |
+| feature spotlight | recipe | 10 s | one feature per post (booking, chat edits, domain, photos) | eyebrow + title → UI demo with cursor + zoom + Highlight/Callout → end card |
+| how it works | recipe | 12 s | explainer, ads | 3 steps × ~3 s, step rail, visual per step (`brand.steps`) |
+| proof / stats | recipe | 8-9 s | retargeting | `Counter` tiles from real numbers (`$0` start, `$5`/mo, 5 sites, 100 edits) + `Marquee` of shop types |
+| testimonial | recipe | 8 s | social proof, daily series | big quote via `KineticText`, initials avatar, name · shop · city (`brand.testimonials[i]`, verbatim) |
+| pricing | recipe | 10 s | offer / trial push | Free vs Pro cards, cursor hovers Free, clicks "Start free trial", Pro glows + `Confetti`, price `Counter` |
+| before / after | recipe | 8 s | pain → gain | compare slider dragged by cursor (`drag` step); quote "My phone used to ring all day" |
+| site tour | recipe | 12-14 s | walkthrough of the real site | full-page screenshot in `BrowserFrame` + `ScrollShot` stops + camera zooms + `Captions` |
+| kinetic hook | recipe | 6 s | Reels/TikTok openers | 3-4 big-type beats, `WordSwap` (bakery/salon/pharmacy), whoosh per beat, URL |
+| what's new | recipe | 10 s | changelog posts | cards spring in with tags (`brand.changelog`) |
+| FAQ | recipe | 9 s | daily Q&A series | typed question bubble → answer reveal (`brand.faq[i]`) → "more at lanesite.pro" |
 
-| Point to make | Pattern | Pick | Animation recipe |
-|---|---|---|---|
-| Hook / promise | Text only, no component | plain `motion.h1` | per-word blur-in + rise |
-| 3-5 features, steps or FAQs shown one after another | Accordion / expanding cards | `card-split-accordian` (installed) | scripted clicks, one item opens at a time |
-| Before vs after, two plans, two options | Tabs, toggle, comparison slider | a tabs / compare component | switch at the midpoint, animate the changing values |
-| Proof (users, speed, uptime) | Stat cards / counters | a stat or number-ticker component | count 0 to N with `animate()` over 1.2 s, ease-out |
-| Many integrations or logos | Marquee / logo cloud | a marquee component | constant slow x-translation, fade edges |
-| Offer / pricing | Pricing cards | a pricing component | highlighted card scales 1.03 and glows once |
-| Process / roadmap | Stepper / timeline | a stepper component | steps light up in order, 0.4 s apart |
-| Call to action | Button + URL | button component (shiny / ripple style) | spring in, one pulse |
+"Recipe" means: copy `kit/templates/launch.tsx` as the pattern, put the new file in `components/video/`, register it in `compositions.ts` with `defineComposition`, then expose `index`/copy as props so one composition gives a whole series via campaigns. Full recipes with timings and shot lists: `references/formats.md`.
 
-If the pattern you need is not in `components/watermelon/`:
-1. Look for it at the watermelon registry (try `https://registry.watermelon.sh/r/registry.json`, otherwise browse the site's component list).
-2. Install with `npx shadcn@latest add https://registry.watermelon.sh/r/<name>.json`.
-3. Open the installed file and read its props, dependencies and whether it holds its own state before using it.
-4. If nothing fits, compose it from shadcn primitives plus `motion/react` rather than forcing the wrong component.
+Aspect ratios: `16x9` 1920×1080, `9x16` 1080×1920, `1x1` 1080×1080, `4x5` 1080×1350. Build every layout with `useVideo()` (`u` = 1px at 1080p short side, plus `portrait`/`landscape`). Size everything as `n * u`. Keep text out of the bottom 20% and top 12% in 9:16 (platform UI).
 
-Never edit files inside `components/watermelon/` in place. Pass props, wrap them, or copy the file to `components/video/` if you need controlled state.
+## 4. Kit API (import from `@/components/video-kit`)
 
-## 4. Animation rules
+- **Timeline**: `<Sequence from duration enter exit transition>` (transitions: fade, blur, rise, drop, scale, zoom, slide-left/right, wipe-left/right/up, iris), `<Series>`, `useTime()` (local s), `useVideo()`, `interpolate`, `progress`, `spring(t, at)`, `Easing.*`, `seeded()` (never `Math.random`), `useCue(at, fn)`, `<Sfx at sound>`, `emitSound`, `holdReady()` / `useHeldJson()` for async data.
+- **Cursor**: `<Cursor script={[...]} glow trail start />`. Steps: `{at, move: target}`, `{at, click: target}` (arrives 0.06 s before `at`), `{at, type: "text", into: target, cps}`, `{at, drag: {from, to}, dur}`, `{at, scroll: container, to|by, dur}`, `{at, press: "Mod+K"}` (shows keycaps), `{at, hide|show}`. Targets: CSS selector, element, `[x, y]`. Arrow, hand and I-beam shapes switch from the CSS `cursor` under it. Ripple + press + sounds are built in.
+- **Camera**: `<Camera keys={[{at, dur, zoom, focus, rotateX, rotateY}]} drift>` Screen Studio-style zoom/pan + 3D tilt. `zoomOnClicks(script)` builds keys from the cursor script. Put the Cursor and effects inside the Camera.
+- **Effects**: `Spotlight`, `Highlight`, `Callout`, `Confetti`, `Toast`, `ProgressLine` (target-tracking every frame).
+- **Text**: `KineticText` (rise, blur, mask, pop, slide, scramble, typewriter; accent words, marker), `WordSwap`, `Counter`, `Typewriter`, `Captions`, `Marquee`.
+- **Frames**: `BrowserFrame` (URL can type), `PhoneFrame`, `Float3D`, `PopIn`, `Reveal`, `ScrollShot`.
+- **Backgrounds**: `Backdrop variant` aurora, mesh, grid, dots, beams, spotlight, with grain + vignette.
+- **Brand UI** (`kit/templates/ui.tsx`): `Logo`, `Eyebrow`, `headline()`, `Button` (shimmer), `Composer`, `BuildLog`, `MiniSite`, `ChatPanel`, `BookingWidget`, `DomainPanel`, `EndCard`. These are real interactive components: clicks change their state.
 
-- Use `motion/react` (already a dependency). Springs for objects: `{type:'spring', stiffness:300-600, damping:30-50}`. Ease curves for text and opacity: `[0.22,1,0.36,1]`, 0.4-0.7 s.
-- Animate at most two things at once. Everything else waits.
-- Readability at 1080p: headline 72-110 px, item titles at least 28 px effective, body at least 22 px effective, 96 px safe margin, strong contrast against the background.
-- The accordion is small by default (about 320-384 px wide). Wrap it in a `transform: scale(1.8-2.2)` container (`transform-origin: center`) so it reads on a 1920 px canvas. Do not change its internals.
-- The accordion is uncontrolled, so drive it with real DOM clicks on its `li button` elements from the stage timeline, plus a fake cursor (Playwright recordings do not show the OS cursor). Move the cursor to the target 0.45 s before each click (0.4 s ease), re-read the target's bounding box just before clicking because earlier items are still animating, then press feedback (scale 0.85 for 0.1 s) on click.
-- Background: subtle brand-colored gradient, optional slow drift. No busy loops, no rapid flashing.
-- Disable everything that does not belong in the video: no scrollbars (`overflow:hidden` on body), no dev overlays (hide the Next.js dev indicator or run a production build with `next build && next start`), no cookie banners, no layout shift after `__videoReady`.
+Drive event-driven components with real clicks. Store the click time with `const now = useClockRef(); onClick={() => setAt(now())}`, then animate from that time.
 
-## 5. Build the stage page
-
-Create a route that is not linked from the site, e.g. `app/video/page.tsx` (Next) or `src/pages/Video.tsx` plus a route (Vite). Add `robots: noindex`. One timeline on one clock inside the page is what keeps timings reliable.
-
-Contract with the render script (do not rename):
-- `window.__videoReady = true` once fonts and layout are ready.
-- `window.__startVideo()` starts the timeline at t = 0.
-- `window.__videoDone = true` at t = 10.0 s.
-
-Skeleton (adapt, do not paste blindly):
-
-```tsx
-'use client';
-import { useEffect, useRef, useState } from 'react';
-import { motion, animate } from 'motion/react';
-import { AccordionApp } from '@/components/watermelon/card-split-accordian';
-// import the same lucide icons the component uses, or pick ones that match each feature
-
-declare global {
-  interface Window { __videoReady?: boolean; __videoDone?: boolean; __startVideo?: () => void }
-}
-
-type Scene = 'idle' | 'hook' | 'demo' | 'cta' | 'end';
-
-export default function VideoStage() {
-  const [scene, setScene] = useState<Scene>('idle');
-  const cursor = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const at = (ms: number, fn: () => void) => window.setTimeout(fn, ms);
-
-    const moveTo = (i: number, dur = 0.4) => {
-      const btn = document.querySelectorAll<HTMLElement>('[data-stage="acc"] li button')[i];
-      if (!btn || !cursor.current) return;
-      const r = btn.getBoundingClientRect();
-      animate(cursor.current, { x: r.left + r.width * 0.75, y: r.top + r.height / 2 },
-        { duration: dur, ease: [0.22, 1, 0.36, 1] });
-    };
-    const click = (i: number) => {
-      moveTo(i, 0.12); // correct for layout that moved meanwhile
-      at(120, () => {
-        document.querySelectorAll<HTMLElement>('[data-stage="acc"] li button')[i]?.click();
-        if (cursor.current) animate(cursor.current, { scale: [1, 0.85, 1] }, { duration: 0.2 });
-      });
-    };
-
-    window.__startVideo = () => {
-      at(200, () => setScene('hook'));
-      at(1500, () => setScene('demo'));
-      [2000, 3600, 5200, 6800].forEach((ms, i) => {
-        at(ms - 450, () => moveTo(i));
-        at(ms - 120, () => click(i));
-      });
-      at(8000, () => setScene('cta'));
-      at(10000, () => { setScene('end'); window.__videoDone = true; });
-    };
-
-    document.fonts.ready.then(() => { window.__videoReady = true; });
-  }, []);
-
-  // render: background, hook text, <div data-stage="acc" style={{transform:'scale(1.9)'}}><AccordionApp items={FEATURES}/></div>,
-  // CTA block, and the cursor div (position:fixed; left:0; top:0; z-50; pointer-events:none) using motion variants keyed on `scene`.
-  return null;
-}
-```
-
-Define `FEATURES` as `AccordionItemData[]` (import the type from the component) with the 4 real features from the brief.
-
-## 6. Render
-
-Copy `render.mjs` (shipped next to this file) to `scripts/render-video.mjs`, then:
+## 5. Free component libraries
 
 ```bash
-node scripts/render-video.mjs --url http://localhost:3000/video --out out/lanesite-promo.mp4
-# vertical version
-node scripts/render-video.mjs --url http://localhost:3000/video --w 1080 --h 1920 --out out/lanesite-promo-9x16.mp4
+node scripts/video/find-component.mjs "marquee"          # searches all 7 registries
+node scripts/video/find-component.mjs cursor --registry magicui,reactbits
+npx shadcn@latest add <printed url>
 ```
 
-(Use the dev server's real port. A production build is preferred for the final render.) The script records the page in real time, trims to the moment `__startVideo()` was called, and re-encodes to H.264, yuv420p, CRF 18, 30 fps.
+Registries: watermelon.sh (product UI: tabs, pricing, toolbars, feature tours), Magic UI (number-ticker, marquee, border-beam, shimmer-button, safari/iphone mockups, animated-beam, particles), Aceternity (spotlight, hero blocks, 3D cards), React Bits (`*-TS-TW`: BlurText, ClickSpark, SplashCursor, backgrounds, often GSAP/OGL), Animate UI (backgrounds, buttons), Cult UI (mock-browser-window, dynamic-island, texture buttons), Motion Primitives (text-effect, morphing, spotlight).
 
-## 7. Verify before reporting done
+Rules: read the installed file before using it (props, internal state, deps). Never edit vendor files in place; wrap them or copy them into `components/video/`. Scroll-triggered or in-view components need their trigger forced (`once`/`inView` true, or wrap in a `Sequence` so they mount at the right time). Mouse-reactive components react to the real mirrored mouse. WebGL/canvas components work (rAF is virtual) but render slower. Details and gotchas: `references/components.md`.
 
-```bash
-ffprobe -v error -show_entries format=duration -of csv=p=0 out/lanesite-promo.mp4   # expect 10.0 (+/- 0.1)
-for t in 0.8 3 5.5 9; do ffmpeg -y -v error -ss $t -i out/lanesite-promo.mp4 -frames:v 1 out/check_$t.png; done
-```
+## 6. Render CLI
 
-Open the four PNGs and check:
-- hook text visible and not clipped at 0.8 s
-- accordion open on a different item at 3 s and 5.5 s, text fully readable, cursor on the item
-- CTA with lanesite.pro readable at 9 s
-- no dev overlay, scrollbar, blank frame or layout jump
+`node scripts/video/render.mjs` with:
+`--list` · `--id` · `--format 16x9,9x16|all` · `--props '{"index":2}'|file.json` · `--fps 60` · `--scale 2` (supersampled, crisper, ~3× slower) · `--music bed.mp3 --music-volume 0.2` · `--no-sfx` · `--stills 1,4.5` · `--from 3 --to 7` · `--mode realtime` (screen-recording fallback) · `--url http://localhost:3100/video` · `--no-check` · `--crf 18`.
 
-If anything fails, fix the stage page and re-render. Do not hand over an unchecked video.
+## 7. Social automation
 
-## 8. Hand-off
+`node scripts/video/render.mjs --campaign video/campaigns/example.json [--skip-existing]` renders every video × format. Per video it writes `post.md` (captions per platform). Per campaign it writes `manifest.json` (video, poster, caption, schedule per platform post) and `schedule.csv` (date, platform, video, poster, caption) for bulk schedulers (Buffer, Metricool, Later) or an n8n/Make flow. Use one composition with `index`/copy props to produce a whole week of posts (7 testimonials, 6 FAQs). Platform specs, caption rules and scheduling: `references/social.md`. Posting itself goes through the user's scheduler; never post without the user's approval.
 
-Report: output path(s), duration, resolution, and the two or three things the user can change easily (copy in `FEATURES`, timings in `__startVideo`, brand colors). Delete `out/check_*.png` and `out/.rec`. Do not commit `/video` to production navigation or the sitemap.
+## Common mistakes
+
+- Using `Math.random`, `setInterval` math on wall time, or CSS `animation` loops for timing. Use `useTime()`/`seeded()`. Third-party CSS loops are fine (the clock syncs them).
+- Cursor click on a selector that is not mounted yet: the cursor waits in place. Check stills at the click time.
+- Event times hard-coded after a click: derive them from the click time instead (`useClockRef`).
+- Text under 22u in 9:16, or more than about 8 words on screen at once.
+- Handing over without opening the contact sheet.

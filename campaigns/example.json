@@ -1,0 +1,33 @@
+{
+  "name": "lanesite-week-46",
+  "url": "http://localhost:3000/video",
+  "out": "out/campaigns/lanesite-week-46",
+  "music": null,
+  "hashtags": ["#smallbusiness", "#localshop", "#websitebuilder", "#AI"],
+  "videos": [
+    {
+      "id": "launch",
+      "name": "launch",
+      "formats": ["9x16", "16x9", "1x1"],
+      "props": {},
+      "post": {
+        "caption": "Describe your shop in a few lines. LaneSite builds the website, adds bookings and publishes it with HTTPS. Start free at lanesite.pro",
+        "schedule": "2026-11-10T09:00:00-05:00",
+        "platforms": {
+          "instagram": { "format": "9x16" },
+          "tiktok": { "format": "9x16" },
+          "youtube-shorts": { "format": "9x16", "caption": "From a few lines to a live shop website. #shorts" },
+          "linkedin": { "format": "1x1", "hashtags": ["#smallbusiness", "#AI"] },
+          "x": { "format": "16x9", "hashtags": [] }
+        }
+      }
+    },
+    {
+      "id": "launch",
+      "name": "launch-hook-b",
+      "formats": ["9x16"],
+      "props": { "hookA": "No website yet?", "hookB": "We build the website." },
+      "post": { "caption": "Hook B test: same video, different first line. lanesite.pro", "schedule": "2026-11-12T12:00:00-05:00", "platforms": { "instagram": {}, "tiktok": {} } }
+    }
+  ]
+}
