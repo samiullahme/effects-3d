@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LinkDrop</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#6b7280;--accent:#4f46e5;--border:#e5e7eb;--warn:#b45309;--warnbg:#fef3c7;--ok:#15803d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--card:#1d2026;--text:#eceef1;--muted:#9aa1ac;--accent:#818cf8;--border:#2e323a;--warn:#fbbf24;--warnbg:#3a2d0b;--ok:#4ade80}}
+:root[data-theme="dark"]{--bg:#14161a;--card:#1d2026;--text:#eceef1;--muted:#9aa1ac;--accent:#818cf8;--border:#2e323a;--warn:#fbbf24;--warnbg:#3a2d0b;--ok:#4ade80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:16px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#9ca3af}
+.dot.on{background:#22c55e}
+.box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:8px;align-items:center}
+input[type=text],textarea,select{flex:1;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px;font-family:inherit}
+textarea{resize:vertical;min-height:44px}
+button{padding:11px 16px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5}
+button.ghost{background:transparent;color:var(--muted);padding:6px 10px;font-weight:500;font-size:13px;border:1px solid var(--border)}
+label.file{flex:1;min-width:0;padding:11px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:14px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+label.file input{display:none}
+.small{font-size:12px;color:var(--muted)}
+.item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
+.top{display:flex;gap:10px;align-items:flex-start}
+.main{flex:1;min-width:0}
+.host{font-size:17px;font-weight:700;word-break:break-all}
+.host .lock{font-size:12px;font-weight:600;color:var(--ok);margin-right:6px}
+.host .lock.bad{color:var(--warn)}
+.path{font-size:13px;color:var(--muted);word-break:break-all;margin-top:2px}
+.go{display:inline-block;margin-top:8px;color:var(--accent);font-size:14px;font-weight:600;text-decoration:none}
+.warn{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;background:var(--warnbg);color:var(--warn);font-size:12px}
+.note{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--bg);font-size:14px;white-space:pre-wrap;word-break:break-word}
+.meta{color:var(--muted);font-size:12px;margin-top:8px}
+.fname{font-size:16px;font-weight:700;word-break:break-all}
+.thumb{max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;display:block}
+.btns{display:flex;flex-direction:column;gap:6px}
+.empty{color:var(--muted);text-align:center;padding:24px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>🔗 LinkDrop</h1>
+  <div class="sub"><span class="dot" id="dot"></span><span id="status">Connecting…</span></div>
+
+  <div class="box">
+    <input id="url" type="text" inputmode="url" placeholder="Link (optional)" autocomplete="off">
+    <textarea id="note" placeholder="Note (optional)" rows="1"></textarea>
+    <div class="row">
+      <label class="file" id="filelabel">📎 Attach file<input id="file" type="file"></label>
+      <select id="ttl" style="flex:0 0 auto" title="Files auto-delete after">
+        <option value="1">1 hour</option>
+        <option value="3" selected>3 hours</option>
+        <option value="6">6 hours</option>
+        <option value="12">12 hours</option>
+      </select>
+    </div>
+    <div class="small">Files auto-delete after the chosen time (max 20 MB). Links and notes stay until you remove them.</div>
+    <button id="send">Send</button>
+  </div>
+
+  <div id="list"></div>
+</main>
+<script>
+(function(){
+  var list=document.getElementById('list'),status=document.getElementById('status'),dot=document.getElementById('dot');
+  var urlIn=document.getElementById('url'),noteIn=document.getElementById('note'),fileIn=document.getElementById('file'),fileLabel=document.getElementById('filelabel'),ttl=document.getElementById('ttl'),sendBtn=document.getElementById('send');
+  var col=null,assets=null,docs=[],cleaning={};
+  var SHORT=['bit.ly','t.co','tinyurl.com','goo.gl','ow.ly','is.gd','buff.ly','cutt.ly','rebrand.ly','shorturl.at','tiny.cc'];
+
+  function norm(u){u=u.trim();if(!u)return '';if(!/^https?:\/\//i.test(u))u='https://'+u;return u}
+  function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB'}
+  function left(ms){var m=Math.max(0,Math.round(ms/60000));if(m>=60)return Math.floor(m/60)+'h '+(m%60)+'m';return m+'m'}
+
+  fileIn.addEventListener('change',function(){fileLabel.firstChild.nodeValue=fileIn.files[0]?'📎 '+fileIn.files[0].name:'📎 Attach file'});
+
+  function cleanup(){
+    var now=Date.now();
+    docs.forEach(function(d){
+      var x=d.data()||{};
+      if(x.type==='file'&&x.exp&&x.exp<now&&!cleaning[d.id]){
+        cleaning[d.id]=1;
+        var p=assets&&x.assetId?assets.delete(x.assetId).catch(function(){}):Promise.resolve();
+        p.then(function(){return col.doc(d.id).delete()}).catch(function(){});
+      }
+    });
+  }
+
+  function mkUrlBlock(url,item){
+    var u;try{u=new URL(url)}catch(e){return}
+    var host=document.createElement('div');host.className='host';
+    var lock=document.createElement('span');lock.className='lock'+(u.protocol==='https:'?'':' bad');lock.textContent=u.protocol==='https:'?'🔒 https':'⚠ http';
+    host.appendChild(lock);host.appendChild(document.createTextNode(u.hostname.replace(/^www\./,'')));
+    item.appendChild(host);
+    var rest=(u.pathname==='/'?'':u.pathname)+u.search+u.hash;
+    if(rest){var p=document.createElement('div');p.className='path';p.textContent=rest.length>140?rest.slice(0,140)+'…':rest;item.appendChild(p)}
+    var h=u.hostname.replace(/^www\./,'').toLowerCase();
+    var w=null;
+    if(SHORT.indexOf(h)>-1)w='Shortened link: the real destination is hidden';
+    else if(h.indexOf('xn--')>-1)w='Unusual characters in the domain name. Check carefully';
+    else if(/^\d+\.\d+\.\d+\.\d+$/.test(h))w='Raw IP address instead of a domain name';
+    if(w){var s=document.createElement('div');s.className='warn';s.textContent='⚠ '+w;item.appendChild(s)}
+    var a=document.createElement('a');a.className='go';a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Open ↗';item.appendChild(a);
+  }
+
+  function render(){
+    list.textContent='';
+    var now=Date.now(),shown=0;
+    docs.forEach(function(d){
+      var x=d.data()||{};
+      if(x.type==='file'&&x.exp&&x.exp<now)return;
+      var card=document.createElement('div');card.className='item';
+      var top=document.createElement('div');top.className='top';
+      var main=document.createElement('div');main.className='main';
+
+      if(x.type==='link'&&/^https?:\/\//i.test(x.url||'')){mkUrlBlock(x.url,main)}
+      else if(x.type==='file'){
+        var fn=document.createElement('div');fn.className='fname';fn.textContent='📄 '+(x.name||'file');main.appendChild(fn);
+        var fm=document.createElement('div');fm.className='path';fm.textContent=fmtSize(x.size||0)+' · expires in '+left(x.exp-now);main.appendChild(fm);
+        if(x.assetUrl){
+          if(/^image\//.test(x.ctype||'')){var im=document.createElement('img');im.className='thumb';im.src=x.assetUrl;main.appendChild(im)}
+          var a=document.createElement('a');a.className='go';a.href=x.assetUrl;a.download=x.name||'file';a.target='_blank';a.rel='noopener';a.textContent='Download ↓';main.appendChild(a);
+        }
+      }
+      if(x.note){var n=document.createElement('div');n.className='note';n.textContent=x.note;main.appendChild(n)}
+      var m=document.createElement('div');m.className='meta';m.textContent=x.t?new Date(x.t).toLocaleString():'';main.appendChild(m);
+
+      var btns=document.createElement('div');btns.className='btns';
+      var copyText=x.type==='link'?x.url:(x.type==='file'?null:x.note);
+      if(copyText){var c=document.createElement('button');c.className='ghost';c.textContent='Copy';
+        c.onclick=function(){try{navigator.clipboard.writeText(copyText);c.textContent='Copied'}catch(e){}setTimeout(function(){c.textContent='Copy'},1200)};btns.appendChild(c)}
+      var del=document.createElement('button');del.className='ghost';del.textContent='✕';
+      del.onclick=function(){
+        var p=(x.type==='file'&&assets&&x.assetId)?assets.delete(x.assetId).catch(function(){}):Promise.resolve();
+        p.then(function(){return col.doc(d.id).delete()}).catch(function(){});
+      };
+      btns.appendChild(del);
+      top.appendChild(main);top.appendChild(btns);card.appendChild(top);list.appendChild(card);shown++;
+    });
+    if(!shown){var e=document.createElement('div');e.className='empty';e.textContent='Nothing yet. Send a link, note or file from any device.';list.appendChild(e)}
+  }
+
+  async function send(){
+    if(!col)return;
+    var u=urlIn.value.trim()?norm(urlIn.value):'',note=noteIn.value.trim(),f=fileIn.files[0];
+    if(!u&&!note&&!f)return;
+    sendBtn.disabled=true;
+    try{
+      var now=Date.now();
+      if(f){
+        if(!assets){status.textContent='File upload not available for this account';sendBtn.disabled=false;return}
+        if(f.size>20*1024*1024){status.textContent='File is over 20 MB';sendBtn.disabled=false;return}
+        status.textContent='Uploading…';
+        var r=await assets.upload(f);
+        await col.add({type:'file',name:f.name,size:f.size,ctype:f.type||r.contentType||'',assetId:r.id,assetUrl:r.url,note:note,t:now,exp:now+Number(ttl.value)*3600000});
+        if(u)await col.add({type:'link',url:u,note:'',t:now+1});
+      }else if(u){
+        await col.add({type:'link',url:u,note:note,t:now});
+      }else{
+        await col.add({type:'note',note:note,t:now});
+      }
+      urlIn.value='';noteIn.value='';fileIn.value='';fileLabel.firstChild.nodeValue='📎 Attach file';
+      status.textContent='Live · open this page on both devices';
+    }catch(e){status.textContent='Send failed: '+(e&&e.message?e.message:'try again')}
+    sendBtn.disabled=false;
+  }
+  sendBtn.onclick=send;
+  urlIn.addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+
+  list.innerHTML='<div class="empty">Loading…</div>';
+  var timer=setTimeout(function(){status.textContent='Could not connect. Open this link while signed in to claude.ai.';list.innerHTML=''},10000);
+  (async function(){
+    try{
+      var db=await claude.use('db');
+      if(!db){clearTimeout(timer);status.textContent='Could not connect. Open this link while signed in to claude.ai.';list.innerHTML='';return}
+      try{assets=await claude.use('assets')}catch(e){assets=null}
+      col=db.collection('links');
+      col.orderBy('t','desc').limit(100).onSnapshot(function(snap){
+        clearTimeout(timer);dot.classList.add('on');status.textContent='Live · open this page on both devices';
+        docs=snap.docs;render();cleanup();
+      },function(){clearTimeout(timer);status.textContent='Connection error'});
+      setInterval(function(){render();cleanup()},30000);
+    }catch(e){status.textContent='Could not connect'}
+  })();
+})();
+</script>
+</body>
+</html>
